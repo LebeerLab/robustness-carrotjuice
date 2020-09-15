@@ -1,0 +1,452 @@
+---
+title: "Robustness of carrot juice fermentation against three common food pathogens"
+author: "Wannesvb"
+date: "31 januari 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyamplicons)
+```
+
+## import data and load packages
+
+```{r}
+#install.packages("devtools")
+#devtools::install_github("SWittouck/tidyamplicons", ref = "v0.2.0")
+library(FSA)
+library(tidyverse)
+library(readxl)
+library(tidyamplicons)
+library(cowplot)
+library(ggpubr)
+library(grid)
+library(gridExtra)
+
+theme_pub<-function (base_size = 12, base_family = "") {
+  
+  theme_grey(base_size = base_size, 
+             base_family = base_family) %+replace% 
+    
+    theme(# Set text size
+      plot.title = element_text(size = 18),
+      axis.title.x = element_text(size = 15),
+      axis.title.y = element_text(size = 15, 
+                                  angle = 90),
+      
+      axis.text.x = element_text(size= 10),
+      axis.text.y = element_text(size = 10),
+      
+      strip.text.x = element_text(size =12,face = "italic",margin=margin(0,0,5,0)),
+      strip.text.y = element_text(size = 15,
+                                  angle = -90),
+      
+      # Legend text
+      legend.title = element_text(size = 8),
+      legend.text = element_text(size = 10),
+      
+      # Configure lines and axes
+      axis.ticks.x = element_line(colour="black"), 
+      axis.ticks.y = element_line(colour = "black"), 
+      
+      # Plot background
+      panel.background = element_rect(fill = "white"),
+      panel.grid.major = element_blank(), 
+      panel.grid.minor = element_blank(),
+      
+      # Facet labels        
+      legend.key = element_rect(colour = "grey80"), 
+      strip.background = element_blank())
+}
+
+
+
+
+library(dada2)
+reclassify_family <- function(ta, family, refdb, sequence_var = "sequence") {
+  
+  ta$taxa <-
+    ta$taxa %>%
+    filter(! is.na(sequence_var)) %>%
+    {
+      .[["genus"]][.$family == family & ! is.na(.$family)] <- 
+        .[[sequence_var]][.$family == family & ! is.na(.$family)] %>%
+        dada2::assignTaxonomy(refFasta = refdb, multithread = T) %>%
+        .[, 6] %>%
+        as.vector()
+      .
+    }
+  
+  ta
+  
+}
+
+fin_refdb <- ".\\reclassify_lactos\\data"
+
+library(tidyamplicons)
+library(tidyverse)
+run$taxa <-
+  run$taxa %>%
+  {.$family[.$family == "Leuconostocaceae"] <- "Lactobacillaceae"; .}
+
+library(dada2)
+
+# reclassify ASVs of Lactobacillaceae using reference database
+run2 <- reclassify_family(run,"Lactobacillaceae", fin_refdb)
+
+
+
+
+
+
+
+
+
+```
+
+## Figure 2
+
+```{r pressure, echo=FALSE}
+
+ph_figure_1<- ph %>% 
+  filter(experiment !="challenge")%>%
+  group_by(pathogens) %>%
+  group_by(day)%>%
+  mutate(ph=mean(pH)) %>%
+  mutate(sd_ph=sd(pH))%>%
+  mutate(experiment=ifelse(pathogens=="no","No inoculation",experiment))%>%
+  ggplot(aes(x=day,y=ph,shape=experiment))+
+  geom_point(size=2)+
+  geom_errorbar(aes(ymin=ph-sd_ph,ymax=ph+sd_ph))+
+  geom_line(aes(group=experiment))+
+  ylab("pH \n")+
+  expand_limits(y=3)+
+    scale_x_continuous(breaks=seq(0,30,5))+
+    theme_pub()+
+  scale_color_manual(values = c("#000000","#969696"))+
+  theme(
+  axis.title.y = element_text(size = 12))+
+  labs("A")+
+  guides(color = guide_legend(override.aes = list(shape = 18)))
+
+plot1<-abundances %>%
+  filter(experiment != "challenge") %>%
+  filter(experiment != "cooling")%>%
+  mutate(strain_day=paste0(day,strain)) %>%
+  #mutate(strain=italic(strain))%>%
+  mutate(experiment=ifelse(experiment=="103 CFU/mL inoculum","10^3 CFU/mL inoculum","10^5 CFU/mL inoculum"))%>%
+  group_by(experiment,strain_day) %>%
+  mutate(abundance = as.numeric(abundance)) %>%
+  mutate(log_abundance=log10(abundance)) %>%
+  mutate(mean_abundance= log10(mean(abundance))) %>%
+  mutate(sd_ab=sd(log_abundance))%>%
+  #mutate(day=as.factor(day))%>%
+  ggplot(aes(x=day,y=mean_abundance,shape=experiment))+
+    geom_line(aes(x=day,y=mean_abundance,linetype=experiment))+
+    geom_errorbar(aes(ymin=mean_abundance-sd_ab,ymax=mean_abundance+sd_ab))+
+    geom_hline(yintercept = 1,size=1, linetype="dotted")+
+    #geom_rect(ymin= -1,ymax=1,xmax=40,xmin=-5,fill="gray91",alpha=0.1)+
+    geom_point(size=2)+
+    xlim(0,30)+
+    ylab("log CFU/mL")+
+    ylim(0,10)+
+    scale_x_continuous(breaks=seq(0,30,5))+
+    facet_wrap(~strain,scales="free")+
+    theme_pub()+
+    theme(axis.title.x=element_blank(),
+          axis.title.y = element_text(size = 12))+
+  labs("B")
+
+grob<- grobTree(textGrob("LOD",
+  gp=gpar(col="black", fontsize=10, fontface="bold")))
+
+#plot1<- plot1 + annotation_custom(grob,xmin=24,xmax=26,ymin=1.2,ymax=2)
+
+#install.packages("patchwork")
+library(patchwork)
+
+layout <- "
+AAAA
+BBB#
+"
+
+plot1 + ph_figure_1 +
+  plot_layout(design = layout) +plot_annotation(tag_levels = c("A","B"))
+
+#plot_grid(plot1,ph_figure_1, ncol =1, labels = c("A","B") )
+
+ggsave("Robustness_figure1.jpg",dpi=300,width = 8)
+```
+
+# Figure 3
+
+```{r}
+aggregate_taxa <- function(ta, rank = NULL) {
+
+  if (! is.null(rank)) {
+
+    rank_names <-
+      rank_names(ta) %>%
+      intersect(names(ta$taxa))
+
+    if (length(rank_names) == 0) {
+      stop("at least one of the taxonomic rank names should be present ",
+           "in the taxa table")
+    }
+
+    if (! rank %in% rank_names) {
+      stop("the rank you supplied should be one of the rank names")
+    }
+
+    rank_index <- which(rank_names == rank)
+    rank_names_to_keep <- rank_names[1:rank_index]
+    ta <- select_taxa(ta, taxon_id, !! rank_names_to_keep)
+
+  }
+
+  # this avoids some problems
+  ta$taxa[is.na(ta$taxa)] <- "unknown"
+  on.exit(ta$taxa[ta$taxa == "unknown"] <- NA)
+
+  ta$taxa <-
+    ta$taxa %>%
+    nest(taxon_id) %>%
+    mutate(taxon_id_new = paste("t", 1:n(), sep = ""))
+
+  id_conversion <-
+    ta$taxa %>%
+    unnest(data) %>%
+    select(taxon_id, taxon_id_new)
+
+  ta$taxa <-
+    ta$taxa %>%
+    select(- data) %>%
+    rename(taxon_id = taxon_id_new)
+
+  ta$abundances <-
+    ta$abundances %>%
+    left_join(id_conversion) %>%
+    select(- taxon_id) %>%
+    group_by(taxon_id_new, sample_id) %>%
+    summarize(abundance = sum(abundance)) %>%
+    ungroup() %>%
+    rename(taxon_id = taxon_id_new)
+
+  # return ta object
+  ta
+
+}
+
+family_col<-run %>%
+  filter_samples(cooling == 0) %>%
+  mutate_samples(replicate_day=paste0(day,replicate)) %>%
+  mutate_samples(day = as.factor(day))%>%
+  aggregate_taxa(rank="family")%>%
+  add_taxon_name_color()%>%
+  taxa()%>%
+  select(family,arrange_by_me,taxon_name_color)
+
+
+run$taxa<-run$taxa%>%
+  left_join(family_col)
+
+
+run %>%
+  filter_samples(cooling == 0) %>%
+  mutate_samples(replicate_day=paste0(day,replicate)) %>%
+  mutate_samples(day = as.factor(day))%>%
+  mutate_samples(replicate=factor(replicate,levels=c("Spontaneous","Inoculated")))%>%
+  filter_samples(replicate != "Blank")%>%
+  filter_taxa(kingdom =="Bacteria")%>%
+  select_samples(-description)%>%
+  aggregate_samples()%>%
+    get_bar_plot(x=day,geom_bar=F)+
+  geom_bar(stat = "identity", col="black")+
+  facet_wrap(~replicate,scales="free",ncol=4) +
+  theme_pub()+
+  ylab("Relative Abundance \n") +
+  xlab("\n Day")+
+  labs(fill = "Family")+
+  theme(
+    axis.text.x = element_text(size= 10),
+      axis.text.y = element_text(size = 10),
+    strip.text.x = element_text(size =12,face = "bold",margin=margin(0,0,5,0))
+  )+
+  scale_fill_brewer(palette = "Set1")
+
+
+#ggsave("figure_2_strains.jpg",dpi=300,height=5)
+```
+
+#Figure 4
+
+```{r}
+plot3<-abundances %>%
+  filter(experiment == "cooling") %>%
+  filter(day<=10)%>%
+  mutate(strain_day=paste0(day,strain)) %>%
+  group_by(strain_day) %>%
+  mutate(abundance = as.numeric(abundance)) %>%
+  mutate(log_abundance=log10(abundance))%>%
+  mutate(mean_abundance= log10(mean(abundance))) %>%
+  mutate(sd_ab=sd(log_abundance))%>%
+  mutate(day=as.factor(day))%>%
+  ggplot(aes(x=day,y=mean_abundance,shape=strain,linetype=strain)) +
+    geom_point(size=3)+
+    geom_line(aes(x=day,y=mean_abundance,group=strain))+
+    geom_errorbar(aes(ymin=mean_abundance-sd_ab,ymax=mean_abundance+sd_ab),width=0.1)+
+    geom_hline(yintercept = 1,size=1,linetype="dotted")+
+    ylab("CFU/mL \n")+
+    ylim(0,4)+
+    xlab("")+
+    #facet_wrap(~strain, scales="free") +
+    theme_pub()+
+  theme(legend.text = element_text(face="italic"),
+        legend.title=element_text(),
+        axis.title.y = element_text(size = 12))
+grob<- grobTree(textGrob("LOD",
+  gp=gpar(col="black", fontsize=12, fontface="bold")))
+
+plot3<- plot3 + annotation_custom(grob,xmin = 6,xmax = 8,ymin=1.2,ymax=2) + labs(shape="pathogen", linetype="pathogen")
+
+
+ph_figure_3<-  ph %>% 
+  filter(experiment =="challenge")%>%
+  mutate(type=ifelse(is.na(type),"CUJ-FCJ_L2",type))%>%
+  filter(type=="CUJ-FCJ_L2")%>%
+  mutate(day=as_factor(day))%>%
+  group_by(day) %>%
+  mutate(mean_ph=mean(pH))%>%
+  mutate(sd_ph=sd(pH))%>%
+  ggplot(aes(x=day,y=pH, shape=experiment))+
+  geom_point()+
+  geom_line(aes(x=day,y=mean_ph,group=type))+
+  geom_errorbar(aes(ymin=pH-sd_ph,ymax=pH+sd_ph,width=0.1))+
+  ylab("pH \n")+
+  expand_limits(y=3)+
+  theme_pub()+
+  theme(
+    legend.position =  "none",
+    axis.title.y = element_text(size = 12),
+    axis.title.x = element_text(size = 12)
+    )
+
+layout <- "
+AAAA
+BBBB
+"
+
+
+plot3+ ph_figure_3+
+  plot_layout(design = layout,guides = "collect")+ plot_annotation(tag_levels = c("A","B")) & theme(legend.position = "bottom")
+
+
+ggsave("Figure4_final.jpg",dpi=300,width=3.75,height=6)
+```
+
+#Plot S2
+```{r}
+
+run %>%
+  filter_samples(cooling == 0) %>%
+  mutate_samples(replicate_day=paste0(day,replicate)) %>%
+  mutate_samples(day = as.factor(day))%>%
+  mutate_samples(replicate=factor(replicate,levels=c("Spontaneous","Inoculated")))%>%
+  filter_samples(replicate != "Blank")%>%
+  filter_taxa(kingdom =="Bacteria")%>%
+  select_taxa(-taxon_name_color)%>%
+  select_samples(-description)%>%
+  aggregate_samples()%>%
+    get_bar_plot(x=day)+
+  facet_wrap(~replicate,scales="free",ncol=4) +
+  theme_pub()+
+  ylab("Relative Abundance \n") +
+  xlab("\n Day")+
+  labs(fill = "Family")+
+  theme(
+    axis.text.x = element_text(size= 10),
+      axis.text.y = element_text(size = 10),
+    strip.text.x = element_text(size =12,face = "bold",margin=margin(0,0,5,0))
+  )
+ggsave("figure_S1_ASV.jpg",dpi=300)
+```
+
+#Plot S3
+```{r}
+run %>%
+  filter_samples(cooling==0) %>%
+  add_alphas()%>%
+  samples()%>%
+  mutate(pathogens=ifelse((pathogens)=="0","Spontaneous","Inoculated"))%>%
+  mutate(day_pathogens=paste(day,pathogens))%>%
+  group_by(day_pathogens)%>%
+  mutate(mean_observed=mean(inverse_simpson))%>%
+  mutate(sd_observed=sd(inverse_simpson))%>%
+  select(mean_observed,day_pathogens,pathogens,day) %>%
+  unique () %>%
+  mutate(pathogens=factor(pathogens,level=c("Spontaneous","Inoculated")))%>%
+  mutate(day=factor(day, levels=c("0","1","3","15","30")))%>%
+  ggplot(aes(x=day,y=mean_observed, fill=pathogens))+
+  geom_bar(position = "dodge",stat="identity")+
+  scale_color_grey(aesthetics = "fill")+
+  geom_line(aes(x=day,y=mean_observed,group=pathogens))+
+  ylab("mean inverse simpson \n")+
+  xlab("\n day")+
+  scale_color_grey()+
+  theme_pub()
+
+ggsave("alpha_figure_S1.png",dpi=300)
+```
+
+
+#Plot S4
+
+
+```{r}
+run %>%
+  filter_samples(cooling==0)%>%
+  add_pcoa()%>%
+  samples()%>%
+  mutate(day=as.factor(day),
+         pathogens=as.factor(pathogens))%>%
+  ggplot(aes(x=pcoa1,y=pcoa2,col=day,shape=pathogens))+
+  geom_point(size=3) +
+  theme_pub()
+```
+
+#plot S5
+
+```{r}
+
+plot4<-abundances %>%
+  filter(experiment == "challenge") %>%
+  mutate(strain_day=paste0(day,strain)) %>%
+  group_by(strain_day) %>%
+  mutate(abundance = as.numeric(abundance)) %>%
+  mutate(log_abundance=log10(abundance))%>%
+  mutate(mean_abundance= log10(mean(abundance))) %>%
+  ggplot(aes(x=day,y=log_abundance))+
+    geom_point(size=3)+
+    geom_line(aes(x=day,y=mean_abundance))+
+    geom_hline(yintercept = 1,size=1,linetype="dashed")+
+    ylab("")+
+    xlab("Minutes")+
+    ylim(0,5)+
+    facet_wrap(~strain, scales="free")+
+    theme_pub()
+  
+grob<- grobTree(textGrob("LOD",
+  gp=gpar(col="black", fontsize=12, fontface="bold")))
+
+plot4<-plot4 + annotation_custom(grob,xmin=54,xmax=60,ymin=1.2,ymax=2)
+
+
+plot4
+```
+
+
+
+
+
